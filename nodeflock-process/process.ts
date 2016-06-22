@@ -2,19 +2,100 @@
 /// <reference path="node.d.ts" />
 var fs = require('fs');
 
-declare var ReactDOMServer:any;
-
-function log(...args) {
-    return;
-    /*
-    for(var i in args) {
-        fs.appendFile("/tmp/test.log", (new Date) + "" + JSON.stringify(args[i]) + "\n", function (err) { 
-            if(err) {
-                return console.error("could not write to file", err);
-            }
+ 
+class ConsoleRedirect {
+    private static consoleProps = ["log", "info", "warn", "error"];
+    private fileFuncs;
+    private collectFuns;
+    constructor(
+        private enabled:boolean = true,
+        private logFile:string, 
+        private console, 
+        private logBuffer:any[] = []
+    ) {
+        var consoleRedirect = this;
+        if(this.enabled) {
+            this.fileFuncs = ConsoleRedirect.makeFuncs((level) => {
+                return ConsoleRedirect.getLogFunc(level, consoleRedirect.logToFile, consoleRedirect);
+            }) 
+            this.collectFuns = ConsoleRedirect.makeFuncs((level) => {
+                return ConsoleRedirect.getLogFunc(level, consoleRedirect.appendToBuffer, consoleRedirect);
+            });
+        } else {
+            this.fileFuncs = ConsoleRedirect.makeFuncs((level) => {
+                return ConsoleRedirect.getNullFunc();
+            }) 
+            this.collectFuns = ConsoleRedirect.makeFuncs((level) => {
+                return ConsoleRedirect.getNullFunc();
+            });
+        }
+        this.redirectToFile();
+    }
+    private logToFile(level, ...args) {
+        for(var i in args) {
+            fs.appendFile(this.logFile, (new Date) + " level " + level + " " + JSON.stringify(args[i]) + "\n", function (err) { 
+                if(err) {
+                    return console.error("could not write to file", err);
+                }
+            });
+        }
+    }
+    private appendToBuffer(level, ...args) {
+        this.logBuffer.push({
+            level   : level,
+            data : args,
+            stack   : ConsoleRedirect.getStack()
         });
     }
-    */
+    private static makeFuncs(logFuncConstructor) {
+        var funcs = {};
+        for(var i in ConsoleRedirect.consoleProps) {
+            var level = ConsoleRedirect.consoleProps[i];
+            funcs[level] = logFuncConstructor(level)
+        }
+        return funcs;
+    }
+    private wire(funcs) {
+        for(var i in ConsoleRedirect.consoleProps) {
+            var level = ConsoleRedirect.consoleProps[i];
+            this.console[level] = funcs[level];
+        }
+    }
+    private static getNullFunc() {
+        return function() {};
+    }
+    private static getLogFunc(level:string, f, consoleRedirect) {
+        return function(...args) {
+            f.apply(consoleRedirect, [level].concat(args));
+        };
+    }
+    redirectToFile() {
+        this.wire(this.fileFuncs);
+    }
+    flushBufferToFile() {
+        for(var i in this.logBuffer) {
+            var entry = this.logBuffer[i];
+            this.logToFile.apply(this, [entry.level, entry.message].concat(entry.stack));
+        }
+        this.logBuffer = [];
+    }
+    collect() {
+        this.wire(this.collectFuns);
+    }
+    private static getStack() {
+        var lines = new Error().stack.split("\n");
+        
+        if(lines.length > 4) {
+            return lines.slice(4);
+        }
+        
+        return lines;
+    }
+    flushBuffer() {
+        var b = this.logBuffer;
+        this.logBuffer = [];
+        return b;
+    }
 }
 
 function resolveComponent(name, components) {
@@ -33,7 +114,7 @@ function resolveComponent(name, components) {
 	return undefined;
 }
 
-function executeCall(components:any , callBuffer:Buffer):{
+function executeCall(components:any , callBuffer:Buffer, consoleRedirect:ConsoleRedirect):{
 	    result:any;
 	    error:string;
 	    log:{
@@ -52,30 +133,31 @@ function executeCall(components:any , callBuffer:Buffer):{
                 error = "component func: \"" + call.func + "\" not found";
             } else {
                 try {
+                    consoleRedirect.collect();
                     result = componentFunc.apply(null, call.args);
                 } catch(e) {
-                    error = e.message;
+                    error = "could not call func:" + e.message;
                 }
+                consoleRedirect.redirectToFile();
             }
         } catch(e) {
             // json parsing failed
-            error = e.message;
+            error = "could not parse incloming json: " + e.message;
         }
         return {
-            result: result,
-            error: error,
-            log:[]
+            result : result,
+            error  : error,
+            log    : consoleRedirect.flushBuffer()
         }
 }
 
 
-function run(components) {
+function run(components, consoleRedirect:ConsoleRedirect) {
     var readBuffer = new Buffer("");
     process.stdin.on('readable', () => {
         var buffer:Buffer = process.stdin.read() as Buffer; // 38{"func": "foo.bar", "args": ["hallo"]}
         
         if(buffer) {
-            log(buffer.toString());            
             readBuffer = Buffer.concat([readBuffer, buffer]);
         }
 
@@ -92,11 +174,11 @@ function run(components) {
         
         if(callLength > 0 && (readBuffer.length >= (callStart + callLength))) {
             // got a valid call
-            var callResult = executeCall(components, readBuffer.slice(callStart, callStart+callLength));
+            var callResult = executeCall(components, readBuffer.slice(callStart, callStart+callLength), consoleRedirect);
             var resultBuffer = new Buffer(JSON.stringify(callResult));
             process.stdout.write(resultBuffer.length.toString());
             process.stdout.write(resultBuffer);
-            log("replying", resultBuffer.toString());
+            
             readBuffer = readBuffer.slice(callStart+callLength);
         }
     });
@@ -106,9 +188,13 @@ function run(components) {
     });
 }
 
+var ____consoleRedirect = new ConsoleRedirect(true, "/tmp/test.log", console);
+____consoleRedirect.collect();
 var jsSource = process.argv.pop();
 var contents = fs.readFileSync(jsSource).toString();
 var js = "(function(require, module) {" + contents + ";})(undefined, undefined);";
 eval(js);
-run(global);
+____consoleRedirect.flushBufferToFile();
+____consoleRedirect.redirectToFile();
+run(global, ____consoleRedirect);
 

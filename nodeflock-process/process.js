@@ -1,21 +1,110 @@
 #!/usr/bin/env node
 var fs = require('fs');
-function log() {
-    var args = [];
-    for (var _i = 0; _i < arguments.length; _i++) {
-        args[_i - 0] = arguments[_i];
+var ConsoleRedirect = (function () {
+    function ConsoleRedirect(enabled, logFile, console, logBuffer) {
+        if (enabled === void 0) { enabled = true; }
+        if (logBuffer === void 0) { logBuffer = []; }
+        this.enabled = enabled;
+        this.logFile = logFile;
+        this.console = console;
+        this.logBuffer = logBuffer;
+        var consoleRedirect = this;
+        if (this.enabled) {
+            this.fileFuncs = ConsoleRedirect.makeFuncs(function (level) {
+                return ConsoleRedirect.getLogFunc(level, consoleRedirect.logToFile, consoleRedirect);
+            });
+            this.collectFuns = ConsoleRedirect.makeFuncs(function (level) {
+                return ConsoleRedirect.getLogFunc(level, consoleRedirect.appendToBuffer, consoleRedirect);
+            });
+        }
+        else {
+            this.fileFuncs = ConsoleRedirect.makeFuncs(function (level) {
+                return ConsoleRedirect.getNullFunc();
+            });
+            this.collectFuns = ConsoleRedirect.makeFuncs(function (level) {
+                return ConsoleRedirect.getNullFunc();
+            });
+        }
+        this.redirectToFile();
     }
-    return;
-    /*
-    for(var i in args) {
-        fs.appendFile("/tmp/test.log", (new Date) + "" + JSON.stringify(args[i]) + "\n", function (err) {
-            if(err) {
-                return console.error("could not write to file", err);
-            }
+    ConsoleRedirect.prototype.logToFile = function (level) {
+        var args = [];
+        for (var _i = 1; _i < arguments.length; _i++) {
+            args[_i - 1] = arguments[_i];
+        }
+        for (var i in args) {
+            fs.appendFile(this.logFile, (new Date) + " level " + level + " " + JSON.stringify(args[i]) + "\n", function (err) {
+                if (err) {
+                    return console.error("could not write to file", err);
+                }
+            });
+        }
+    };
+    ConsoleRedirect.prototype.appendToBuffer = function (level) {
+        var args = [];
+        for (var _i = 1; _i < arguments.length; _i++) {
+            args[_i - 1] = arguments[_i];
+        }
+        this.logBuffer.push({
+            level: level,
+            data: args,
+            stack: ConsoleRedirect.getStack()
         });
-    }
-    */
-}
+    };
+    ConsoleRedirect.makeFuncs = function (logFuncConstructor) {
+        var funcs = {};
+        for (var i in ConsoleRedirect.consoleProps) {
+            var level = ConsoleRedirect.consoleProps[i];
+            funcs[level] = logFuncConstructor(level);
+        }
+        return funcs;
+    };
+    ConsoleRedirect.prototype.wire = function (funcs) {
+        for (var i in ConsoleRedirect.consoleProps) {
+            var level = ConsoleRedirect.consoleProps[i];
+            this.console[level] = funcs[level];
+        }
+    };
+    ConsoleRedirect.getNullFunc = function () {
+        return function () { };
+    };
+    ConsoleRedirect.getLogFunc = function (level, f, consoleRedirect) {
+        return function () {
+            var args = [];
+            for (var _i = 0; _i < arguments.length; _i++) {
+                args[_i - 0] = arguments[_i];
+            }
+            f.apply(consoleRedirect, [level].concat(args));
+        };
+    };
+    ConsoleRedirect.prototype.redirectToFile = function () {
+        this.wire(this.fileFuncs);
+    };
+    ConsoleRedirect.prototype.flushBufferToFile = function () {
+        for (var i in this.logBuffer) {
+            var entry = this.logBuffer[i];
+            this.logToFile.apply(this, [entry.level, entry.message].concat(entry.stack));
+        }
+        this.logBuffer = [];
+    };
+    ConsoleRedirect.prototype.collect = function () {
+        this.wire(this.collectFuns);
+    };
+    ConsoleRedirect.getStack = function () {
+        var lines = new Error().stack.split("\n");
+        if (lines.length > 4) {
+            return lines.slice(4);
+        }
+        return lines;
+    };
+    ConsoleRedirect.prototype.flushBuffer = function () {
+        var b = this.logBuffer;
+        this.logBuffer = [];
+        return b;
+    };
+    ConsoleRedirect.consoleProps = ["log", "info", "warn", "error"];
+    return ConsoleRedirect;
+}());
 function resolveComponent(name, components) {
     if (name.length == 0) {
         return undefined;
@@ -31,7 +120,7 @@ function resolveComponent(name, components) {
     }
     return undefined;
 }
-function executeCall(components, callBuffer) {
+function executeCall(components, callBuffer, consoleRedirect) {
     var call;
     var error = "";
     var result = undefined;
@@ -43,29 +132,30 @@ function executeCall(components, callBuffer) {
         }
         else {
             try {
+                consoleRedirect.collect();
                 result = componentFunc.apply(null, call.args);
             }
             catch (e) {
-                error = e.message;
+                error = "could not call func:" + e.message;
             }
+            consoleRedirect.redirectToFile();
         }
     }
     catch (e) {
         // json parsing failed
-        error = e.message;
+        error = "could not parse incloming json: " + e.message;
     }
     return {
         result: result,
         error: error,
-        log: []
+        log: consoleRedirect.flushBuffer()
     };
 }
-function run(components) {
+function run(components, consoleRedirect) {
     var readBuffer = new Buffer("");
     process.stdin.on('readable', function () {
         var buffer = process.stdin.read(); // 38{"func": "foo.bar", "args": ["hallo"]}
         if (buffer) {
-            log(buffer.toString());
             readBuffer = Buffer.concat([readBuffer, buffer]);
         }
         // find start
@@ -80,11 +170,10 @@ function run(components) {
         }
         if (callLength > 0 && (readBuffer.length >= (callStart + callLength))) {
             // got a valid call
-            var callResult = executeCall(components, readBuffer.slice(callStart, callStart + callLength));
+            var callResult = executeCall(components, readBuffer.slice(callStart, callStart + callLength), consoleRedirect);
             var resultBuffer = new Buffer(JSON.stringify(callResult));
             process.stdout.write(resultBuffer.length.toString());
             process.stdout.write(resultBuffer);
-            log("replying", resultBuffer.toString());
             readBuffer = readBuffer.slice(callStart + callLength);
         }
     });
@@ -93,8 +182,12 @@ function run(components) {
         process.exit(1);
     });
 }
+var ____consoleRedirect = new ConsoleRedirect(true, "/tmp/test.log", console);
+____consoleRedirect.collect();
 var jsSource = process.argv.pop();
 var contents = fs.readFileSync(jsSource).toString();
 var js = "(function(require, module) {" + contents + ";})(undefined, undefined);";
 eval(js);
-run(global);
+____consoleRedirect.flushBufferToFile();
+____consoleRedirect.redirectToFile();
+run(global, ____consoleRedirect);
