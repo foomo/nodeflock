@@ -1,4 +1,4 @@
-module.exports =  {
+var components =  {
     Demo: {
         Simple : function(name) {
             return "simple name " + name;
@@ -11,4 +11,6 @@ module.exports =  {
         }
     }
 }
+
+return components;
 

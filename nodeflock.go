@@ -46,6 +46,36 @@ func NewFlock(jsModuleFile string, size int) (f *Flock, err error) {
 	return
 }
 
+func (f *Flock) borrowProcess() (p *process, err error) {
+	// dummy implementation
+	if len(f.processes) > 0 {
+		p = f.processes[0]
+		return
+	}
+	err = errors.New("no process no have")
+	return
+}
+
+func (f *Flock) returnProcess(p *process) error {
+	// dummy impl
+	return nil
+}
+
+func (f *Flock) CallRaw(jsonBytes []byte) (rawResult []byte, err error) {
+	p, processErr := f.borrowProcess()
+	if processErr != nil {
+		err = processErr
+		return
+	}
+	rawResult, callErr := p.rawCallJS(jsonBytes)
+	returnErr := f.returnProcess(p)
+	if returnErr != nil {
+		err = returnErr
+		return
+	}
+	return rawResult, callErr
+}
+
 func (f *Flock) Call(funcName string, args ...interface{}) (result CallResult, err error) {
 	f.chanProcessPool <- nil
 	process := <-f.chanProcessPool

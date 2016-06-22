@@ -94,6 +94,7 @@ function run(components) {
     });
 }
 var jsSource = process.argv.pop();
-log("starting", jsSource);
-//process.stdin.setEncoding('utf8');
-run(require(jsSource));
+var contents = fs.readFileSync(jsSource).toString();
+var js = "(function(require, module) {" + contents + ";})(undefined, undefined);";
+eval(js);
+run(global);

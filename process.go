@@ -81,7 +81,7 @@ func (p *process) start(sourceFile string) error {
 	return nil
 }
 
-func (p *process) stop() error {
+func (p *process) kill() error {
 	if p.cmd != nil {
 		return p.cmd.Process.Kill()
 	}
@@ -92,11 +92,12 @@ func (p *process) rawCallJS(callBytes []byte) (callResultBytes []byte, err error
 	// send data
 	written := 0
 
+	//fmt.Println("writing", len(callBytes), string(callBytes))
+
 	// prepend the length
 	callBytes = append([]byte(fmt.Sprint(len(callBytes))), callBytes...)
 
 	// write to stdin
-	// fmt.Println("writing", string(callBytes))
 	for written < len(callBytes) {
 		n, writeErr := p.pipeStdIn.Write(callBytes[written:])
 		if writeErr != nil {
