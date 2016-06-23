@@ -68,7 +68,11 @@ func NewFlock(jsModuleFile string, size int) (f *Flock, err error) {
 
 			select {
 			case <-time.After(time.Millisecond):
-				lastSourceChange = getFileChange(jsModuleFile)
+				newSourceChange := getFileChange(jsModuleFile)
+				if newSourceChange != lastSourceChange {
+					fmt.Println("source file update", jsModuleFile, lastSourceChange, newSourceChange)
+				}
+				lastSourceChange = newSourceChange
 				//fmt.Println("checking source", lastSourceChange)
 			case deadProcessID := <-chanProcessDied:
 				// a process died
