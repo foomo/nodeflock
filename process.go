@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"os/exec"
 	"strconv"
 	"time"
@@ -29,6 +30,15 @@ type ProcessCall struct {
 }
 
 func newProcess(sourceFile string, sourceFileChange int64, id int, chanExit chan int) (p *process, err error) {
+	sourceFileInfo, sourceFileErr := os.Stat(sourceFile)
+	if sourceFileErr != nil {
+		err = errors.New("process could not read source file: " + sourceFileErr.Error())
+		return
+	}
+	if sourceFileInfo.ModTime().UnixNano() != sourceFileChange {
+		err = errors.New("source file changed yet again")
+		return
+	}
 	p = &process{
 		id:               id,
 		sourceFileChange: sourceFileChange,

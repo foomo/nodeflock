@@ -56,18 +56,21 @@ func NewFlock(jsModuleFile string, size int) (f *Flock, err error) {
 				}
 			}
 
-			// spawn processes, if we lost some
-			for i := numOkProcesses; i < f.size; i++ {
-				p, processErr := newProcess(jsModuleFile, lastSourceChange, f.getId(), chanProcessDied)
-				if processErr != nil {
-					err = processErr
-					return
+			if lastSourceChange > 0 {
+				// spawn processes, if we lost some
+			spawnLoop:
+				for i := numOkProcesses; i < f.size; i++ {
+					p, processErr := newProcess(jsModuleFile, lastSourceChange, f.getId(), chanProcessDied)
+					if processErr != nil {
+						fmt.Println("breaking spawnloop could not launch procees", processErr)
+						break spawnLoop
+					}
+					f.processes = append(f.processes, p)
 				}
-				f.processes = append(f.processes, p)
 			}
 
 			select {
-			case <-time.After(time.Millisecond):
+			case <-time.After(time.Millisecond * 10):
 				newSourceChange := getFileChange(jsModuleFile)
 				if newSourceChange != lastSourceChange {
 					fmt.Println("source file update", jsModuleFile, lastSourceChange, newSourceChange)
