@@ -32,12 +32,21 @@ type Flock struct {
 	idCounter        int
 }
 
-func NewFlock(jsModuleFile string, size int) (f *Flock, err error) {
+func NewFlock(jsModuleFile string, size int, maxExecutionTime time.Duration) (f *Flock, err error) {
 	f = &Flock{
 		size:             size,
 		processes:        []*process{},
 		chanRentalReturn: make(chan *process),
 		chanRentalApply:  make(chan chan processRentalApplicationResponse),
+	}
+
+	lastBusyReportTime := time.Now()
+	reportAllBusy := func() {
+		now := time.Now()
+		if now.Sub(lastBusyReportTime) > 20*time.Second {
+			lastBusyReportTime = now
+			fmt.Println("everybody is busy")
+		}
 	}
 
 	go func() {
@@ -60,7 +69,7 @@ func NewFlock(jsModuleFile string, size int) (f *Flock, err error) {
 				// spawn processes, if we lost some
 			spawnLoop:
 				for i := numOkProcesses; i < f.size; i++ {
-					p, processErr := newProcess(jsModuleFile, lastSourceChange, f.getId(), chanProcessDied)
+					p, processErr := newProcess(jsModuleFile, lastSourceChange, maxExecutionTime, f.getId(), chanProcessDied)
 					if processErr != nil {
 						fmt.Println("breaking spawnloop could not launch procees", processErr)
 						break spawnLoop
@@ -95,12 +104,12 @@ func NewFlock(jsModuleFile string, size int) (f *Flock, err error) {
 			}
 			// let us see if anyone has time
 			processedApplications := []chan processRentalApplicationResponse{}
+
 		applicationLoop:
 			for _, application := range applications {
-
 				if len(busy) == len(f.processes) {
 					// they are all busy
-					fmt.Println("everybody is busy")
+					reportAllBusy()
 					break
 				}
 				var lonelyProcess *process
@@ -120,7 +129,6 @@ func NewFlock(jsModuleFile string, size int) (f *Flock, err error) {
 				// this one is not busy
 				processedApplications = append(processedApplications, application)
 				// make the applicant happy
-				//fmt.Println("sending process to applicant", process.id)
 				if lonelyProcess != nil {
 					busy[lonelyProcess.id] = true
 					application <- processRentalApplicationResponse{
@@ -132,7 +140,6 @@ func NewFlock(jsModuleFile string, size int) (f *Flock, err error) {
 				} else {
 					fmt.Println("could not find lonely process")
 				}
-
 			}
 			// clean up
 			cleanedApplications := []chan processRentalApplicationResponse{}

@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"strconv"
+	"time"
 )
 
 type server struct {
@@ -66,8 +67,8 @@ func (s *server) handleConnection(conn net.Conn) error {
 	}
 }
 
-func RunServer(addr string, flockSize int, jsModuleFile string) error {
-	flock, flockErr := NewFlock(jsModuleFile, flockSize)
+func RunServer(addr string, flockSize int, jsModuleFile string, maxExecutionTime time.Duration) error {
+	flock, flockErr := NewFlock(jsModuleFile, flockSize, maxExecutionTime)
 	if flockErr != nil {
 		return flockErr
 	}

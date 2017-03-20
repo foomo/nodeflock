@@ -22,6 +22,7 @@ type process struct {
 	chanPipeErr      chan error
 	lastCall         int64
 	sourceFileChange int64
+	maxExecutionTime time.Duration
 }
 
 type ProcessCall struct {
@@ -29,7 +30,7 @@ type ProcessCall struct {
 	Args []interface{} `json:"args"`
 }
 
-func newProcess(sourceFile string, sourceFileChange int64, id int, chanExit chan int) (p *process, err error) {
+func newProcess(sourceFile string, sourceFileChange int64, maxExecutionTime time.Duration, id int, chanExit chan int) (p *process, err error) {
 	sourceFileInfo, sourceFileErr := os.Stat(sourceFile)
 	if sourceFileErr != nil {
 		err = errors.New("process could not read source file: " + sourceFileErr.Error())
@@ -45,6 +46,7 @@ func newProcess(sourceFile string, sourceFileChange int64, id int, chanExit chan
 		chanStdout:       make(chan []byte),
 		chanStderr:       make(chan []byte),
 		chanPipeErr:      make(chan error),
+		maxExecutionTime: maxExecutionTime,
 	}
 	err = p.start(sourceFile)
 	if err == nil {
@@ -114,7 +116,8 @@ func (p *process) kill() {
 }
 
 func (p *process) rawCallJS(callBytes []byte) (callResultBytes []byte, err error) {
-	p.lastCall = time.Now().UnixNano()
+	callStart := time.Now()
+	p.lastCall = callStart.UnixNano()
 	// send data
 	written := 0
 
@@ -140,6 +143,12 @@ func (p *process) rawCallJS(callBytes []byte) (callResultBytes []byte, err error
 	for {
 		//fmt.Println("waiting for data from stdin")
 		select {
+		case <-time.After(time.Second):
+			if time.Now().Sub(callStart) > p.maxExecutionTime {
+				go p.kill()
+				err = errors.New(fmt.Sprint("max execution time ", p.maxExecutionTime, " exceeded"))
+				return
+			}
 		case stdoutErr := <-p.chanPipeErr:
 			err = stdoutErr
 			return
