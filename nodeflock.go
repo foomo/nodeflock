@@ -55,7 +55,7 @@ func NewFlock(jsModuleFile string, size int, maxExecutionTime time.Duration) (f 
 		chanProcessDied := make(chan int)
 		lastSourceChange := getFileChange(jsModuleFile)
 		for {
-			// is anyone obsolote
+			// is anyone obsolete
 			numOkProcesses := 0
 			for _, deathRowProcess := range f.processes {
 				if _, isBusy := busy[deathRowProcess.id]; !isBusy && deathRowProcess.sourceFileChange < lastSourceChange {
@@ -114,18 +114,21 @@ func NewFlock(jsModuleFile string, size int, maxExecutionTime time.Duration) (f 
 				}
 				var lonelyProcess *process
 				lonelyProcess = nil
+				//fmt.Println("looking for a process, that is not busy")
 				for _, process := range f.processes {
 					_, isBusy := busy[process.id]
 					if !isBusy && process.sourceFileChange == lastSourceChange {
 						if lonelyProcess == nil {
 							lonelyProcess = process
 						}
-						if lonelyProcess.lastCall < process.lastCall {
+						//fmt.Println("lonely process:", lonelyProcess.id, lonelyProcess.lastCall, "process:", process.id, process.lastCall)
+						if lonelyProcess.lastCall > process.lastCall {
 							lonelyProcess = process
 						}
 					}
 				}
 
+				//fmt.Println("well that is my lonely process:", lonelyProcess.id, lonelyProcess.lastCall)
 				// this one is not busy
 				processedApplications = append(processedApplications, application)
 				// make the applicant happy
