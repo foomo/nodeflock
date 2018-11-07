@@ -86,13 +86,15 @@ func (s *server) run(addr string, flockSize int, jsModuleFile string) error {
 	}
 	for {
 		// this blocks until connection or error
-		conn, err := ln.Accept()
+		nextConn, err := ln.Accept()
 		if err != nil {
 			log.Println("RunSocketServer: could not accept connection", fmt.Sprint(err))
 			continue
 		}
+
 		// a goroutine handles conn so that the loop can accept other connections
-		go func() {
+		go func(conn net.Conn) {
+
 			handlingErr := s.handleConnection(conn)
 			if handlingErr != nil && handlingErr != io.EOF {
 				fmt.Println("could not handle request in socket server::", handlingErr)
@@ -101,6 +103,6 @@ func (s *server) run(addr string, flockSize int, jsModuleFile string) error {
 			if closeErr != nil {
 				fmt.Println("could not close connection", closeErr)
 			}
-		}()
+		}(nextConn)
 	}
 }
