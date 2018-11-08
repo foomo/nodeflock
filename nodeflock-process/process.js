@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 var ___nodejsrequire = require;
 var fs = ___nodejsrequire('fs');
-var ConsoleRedirect = (function () {
+var ConsoleRedirect = /** @class */ (function () {
     function ConsoleRedirect(enabled, logFile, console, logBuffer) {
         if (enabled === void 0) { enabled = true; }
         if (logBuffer === void 0) { logBuffer = []; }
@@ -83,7 +83,7 @@ var ConsoleRedirect = (function () {
         return function () {
             var a = [];
             for (var _i = 0; _i < arguments.length; _i++) {
-                a[_i - 0] = arguments[_i];
+                a[_i] = arguments[_i];
             }
             f.apply(consoleRedirect, [level].concat(a));
         };
@@ -205,7 +205,7 @@ function run(components, consoleRedirect) {
         var callLength = 0;
         var callStart = 0;
         for (var i = 0; i < readBuffer.length; i++) {
-            if (readBuffer[i] == 123) {
+            if (readBuffer[i] == 123) { // opening "{"
                 callStart = i;
                 callLength = parseInt(readBuffer.slice(0, callStart).toString());
                 break;
