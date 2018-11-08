@@ -91,10 +91,9 @@ func (s *server) run(addr string, flockSize int, jsModuleFile string) error {
 			log.Println("RunSocketServer: could not accept connection", fmt.Sprint(err))
 			continue
 		}
-
 		// a goroutine handles conn so that the loop can accept other connections
 		go func(conn net.Conn) {
-
+			fmt.Println("next connection")
 			handlingErr := s.handleConnection(conn)
 			if handlingErr != nil && handlingErr != io.EOF {
 				fmt.Println("could not handle request in socket server::", handlingErr)
