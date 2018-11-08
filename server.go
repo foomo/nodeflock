@@ -98,10 +98,14 @@ func (s *server) run(addr string, flockSize int, jsModuleFile string) error {
 			handlingErr := s.handleConnection(conn)
 			if handlingErr != nil && handlingErr != io.EOF {
 				fmt.Println("could not handle request in socket server::", handlingErr)
+			} else {
+				fmt.Println("done with request")
 			}
 			closeErr := conn.Close()
 			if closeErr != nil {
 				fmt.Println("could not close connection", closeErr)
+			} else {
+				fmt.Println("closed successfully")
 			}
 		}(nextConn)
 	}
