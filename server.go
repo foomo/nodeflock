@@ -17,7 +17,7 @@ type server struct {
 func (s *server) handleConnection(conn net.Conn) error {
 	var headerBuffer [1]byte
 	header := ""
-	iconn := 0
+	//iconn := 0
 	for {
 		_, readErr := conn.Read(headerBuffer[0:])
 		if readErr != nil {
@@ -60,8 +60,8 @@ func (s *server) handleConnection(conn net.Conn) error {
 				}
 				bytesWritten += n
 			}
-			iconn++
-			fmt.Println("responded", iconn, conn)
+			//iconn++
+			//fmt.Println("responded", iconn, conn)
 			header = ""
 			continue
 		}
@@ -98,12 +98,11 @@ func (s *server) run(addr string, flockSize int, jsModuleFile string) error {
 			handlingErr := s.handleConnection(conn)
 			if handlingErr != nil && handlingErr != io.EOF {
 				log.Println("could not handle request in socket server::", handlingErr)
-				closeErr := conn.Close()
-				if closeErr != nil {
-					log.Println("could not close connection", closeErr)
-				}
-			} else {
-				log.Println("connection was closed by the client")
+				// log.Println("connection was closed by the client")
+			}
+			closeErr := conn.Close()
+			if closeErr != nil {
+				log.Println("could not close connection", closeErr)
 			}
 		}(nextConn)
 	}
