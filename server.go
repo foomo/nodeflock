@@ -17,6 +17,7 @@ type server struct {
 func (s *server) handleConnection(conn net.Conn) error {
 	var headerBuffer [1]byte
 	header := ""
+	iconn := 0
 	for {
 		_, readErr := conn.Read(headerBuffer[0:])
 		if readErr != nil {
@@ -59,7 +60,8 @@ func (s *server) handleConnection(conn net.Conn) error {
 				}
 				bytesWritten += n
 			}
-			//fmt.Println("done here")
+			iconn++
+			fmt.Println("responded", iconn, conn)
 			header = ""
 			continue
 		}
