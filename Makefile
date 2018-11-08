@@ -1,5 +1,4 @@
-TAG=`git describe --exact-match --tags $(git log -n1 --pretty='%h') 2>/dev/null || git rev-parse --abbrev-ref HEAD`
-LDFLAGS=-ldflags "-X main.Version=${TAG}"
+LDFLAGS= -ldflags "-X main.version=`git rev-parse --verify HEAD`"
 BIN_PATH=${GOPATH}/src/github.com/foomo/nodeflock/bin
 
 all: test build
@@ -12,7 +11,7 @@ run-ts-demo: ts
 	nodeflock-process/process.js /Users/jan/go/src/github.com/foomo/nodeflock/nodeflock-process/demo.js
 clean:
 	rm -vf bin/*
-build: prepare
+build:
 	go build $(LDFLAGS) -o bin/nodeflock cmd/nodeflock/nodeflock.go
 build-linux: prepare
 	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o bin/nodeflock-linux cmd/nodeflock/nodeflock.go
