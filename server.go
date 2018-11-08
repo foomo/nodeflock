@@ -100,6 +100,8 @@ func (s *server) run(addr string, flockSize int, jsModuleFile string) error {
 				if closeErr != nil {
 					log.Println("could not close connection", closeErr)
 				}
+			} else {
+				log.Println("connection was closed by the client")
 			}
 		}(nextConn)
 	}
